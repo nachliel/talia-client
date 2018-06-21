@@ -1,0 +1,24 @@
+{
+  "name": "talia-client",
+  "version": "0.1.0",
+  "description": "A client API for TALIA Peer Exchange Protocol",
+  "main": "talia.js",
+  "scripts": {
+    "test": "node talia.js reg namespace.group:peer"
+  },
+  "repository": {
+    "type": "git",
+    "url": "talia"
+  },
+  "keywords": [
+    "p2p",
+    "pex",
+    "talia",
+    "exchange"
+  ],
+  "author": "Nachliel Shiloh Hills",
+  "license": "ISC",
+  "dependencies": {
+    "commander": "^2.15.1"
+  }
+}
