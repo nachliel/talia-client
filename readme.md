@@ -64,12 +64,12 @@ command: reg | r <UNI> - will register / update the peer, get response without s
 
   "timeOfRequest" : "date.Now()",
 
-  "queryHash" : "Hash of buffer".
+  "queryHash" : "Hash of buffer",
 
   "peers" : [
     {
       "address" : "ip(122.122.122.122)",
-      "name" : "client/server/peer/whatever...",
+      "name" : "client/server/peer/whatever..."
     }
   ]
 }
