@@ -52,9 +52,10 @@ by those making the DAPPS much stronger and reliable.
 
 ### Usage: node talia.js command \<UNI\>
 command: 
-         reg | r <UNI> - will register / update the peer, get response without showing peers.
+
+         ''reg | r <UNI>'' - will register / update the peer, get response without showing peers.
          
-         recv | u <UNI> - will register / update peer on network, but will show only peers.
+         ''recv | u <UNI>'' - will register / update peer on network, but will show only peers.
 
 
 ### Structure of response from Talia Service:
