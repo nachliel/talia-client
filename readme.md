@@ -34,11 +34,16 @@ UNI is not Case-Sensitive. and it is registered in lower case only. including pa
 * Password       - 0 - 9  a - z , [6 to 20 letters]  (optional)
 
 Examples:
-*``networkname.home:server`` - register peer in home group on networkname network
-*``networkname:phone`` - register peer on networkname network named phone
-*``networkname.group1`` - register peer in group1 on networkname network.
-*``networkname2.com:server?secret1235`` - register new network name, and adding new peer named 'server' to 'com' group. with the password 'secret1235'
-*``networkname2.newgroup:avipc?secret1235`` - add new peer to 'newgroup' named avipc. password is only for network name. Must on register.
+
+``networkname.home:server`` - register peer in home group on networkname network
+
+``networkname:phone`` - register peer on networkname network named phone
+
+``networkname.group1`` - register peer in group1 on networkname network.
+
+``networkname2.com:server?secret1235`` - register new network name, and adding new peer named 'server' to 'com' group. with the password 'secret1235'
+
+``networkname2.newgroup:avipc?secret1235`` - add new peer to 'newgroup' named avipc. password is only for network name. Must on register.
 
 ## talia.js
 talia.js is a simple commandline tool to register and receive peers over Talia Peer Exchange Protocol.
