@@ -50,7 +50,7 @@ talia.js is a simple commandline tool to register and receive peers over Talia P
 talia.js make use of the module talia-client.js that can be used in any other p2p program to find peers over network, without the need for hardcoded peers.
 by those making the DAPPS much stronger and reliable.
 
-### Usage: node talia.js command <UNI>
+### Usage: node talia.js command \<UNI\>
 command: reg | r <UNI> - will register / update the peer, get response without showing peers.
          recv | u <UNI> - will register / update peer on network, but will show only peers.
 
@@ -58,13 +58,13 @@ command: reg | r <UNI> - will register / update the peer, get response without s
 ### Structure of response from Talia Service:
 ```json
 {
-  "code" : #
+  "code" : "#",
 
-  "queryCode" : #
+  "queryCode" : "#",
 
-  "timeOfRequest" : date.Now(),
+  "timeOfRequest" : "date.Now()",
 
-  "queryHash" : Hash of buffer.
+  "queryHash" : "Hash of buffer".
 
   "peers" : [
     {
