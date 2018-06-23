@@ -61,7 +61,7 @@ program
 
         console.log("Update server...");
 
-        taliaProtocol.callServer(function (exp) {
+        taliaProtocol.registerPeer(function (exp) {
             console.log('UNI: ' + uni);
             console.log('Server Response: ');
             // Prints message returned by server:
