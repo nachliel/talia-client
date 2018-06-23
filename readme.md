@@ -51,10 +51,10 @@ talia.js make use of the module talia-client.js that can be used in any other p2
 by those making the DAPPS much stronger and reliable.
 
 ### Usage: node talia.js command \<UNI\>
-command: 
+command:
 
          ''reg | r <UNI>'' - will register / update the peer, get response without showing peers.
-         
+
          ''recv | u <UNI>'' - will register / update peer on network, but will show only peers.
 
 

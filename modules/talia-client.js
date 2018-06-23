@@ -3,21 +3,23 @@ const dgram = require('dgram');
 
 const crypto = require('crypto');
 
-const pexIP = '35.180.100.123';         // Server IP. in due time it will be address to lookup.
+const dns = require('dns');
 
-const pexPort = 50001;                  // Server Port.
 
-const TIMEOUT = 2000;                  // Set timeout:
 
-module.exports = function PEXP(uni) {
+module.exports =(function taliaClient() {
+
     // ----------------------------------------------------------------------- //
     /***********************************************************************************
      * Usage:
-     *      const PEXProtocol = require('./pexp');
-     *      const pex = new PEXProtocol('networkname.groupname:peername?password');
-     *      if (pex.validName) {  // Check if the UNI is valid. (Uniform Network Identifier)
-     *          pex.callServer();
-     *          pex.callServer(function (exp) {
+     *      const taliaProtocol = require('./pexp');
+     *      if (!taliaProtocol.getUNI(uni)) {
+     *          console.log('Err : protocol syntax illegal: network.group:peername?passwod');
+     *          process.exit(1);
+     *      }
+     *
+     *
+     *      taliaProtocol.registerPeer(function (exp) {
      *              exp contain server response: Object.
      *              // Prints only the peers.
      *              console.log(pex.networkPeers);
@@ -35,29 +37,54 @@ module.exports = function PEXP(uni) {
      *
      *   "queryHash" : Hash of buffer.
      *
+     *   "networkName" : Name of network
+     *
+     *   "groupName"   : Group Name
+     *
      *   "peers" : [
      *     {
      *       "address" : "ip(122.122.122.122)",
      *       "name" : "client/server/peer/whatever...",
      *     }
      *   ]
-     *   networkName : Name of network
-     *   groupName   : Group Name
+     *
      * }
      **********************************************************************************/
 
-    // TODO: When domain available: make sure to lookup for ip to send the packets.
+    let ipTalia;                            // Server IP. in due time it will be address to lookup.
+
+    const TALIAPORT = 50001;                // Server Port.
+
+    const TIMEOUT = 2000;                   // Set timeout:
+
+    const TALIADOMAIN = 'udp.talia-pex.net';
+
+    const MaxPacketSend = 5;                // Maximum number of packets to be sent.
+                                            // UNI REGEX
+    const protocolRegex = /^([0-9a-z]{4,20})(\.([0-9a-z]{2,6}|\*\*))?(:([0-9a-z]{2,8}))?(\?([0-9a-z]{6,20}))?$/;
+
+    let protocolName;                       // Name of protocol Name
+
+    let networkPeers = [];                  // Network Peers, filled when callServer,
+
+    let packets = [];                       // packet handler for multiple packets.
+
+    let packetintervalID;                   // For try sending multiple packet on udp failure ID
+
+    let intervalID;                         // Interval update ID
+
+
 
     //------------------------------------------------------------------------------//
     //                      Peer Handler Functions                                  //
     //------------------------------------------------------------------------------//
 
     /**
-     * Conver String IP address to integer      xxx.xxx.xxx.xxx -> INTEGER
+     * Convert String IP address to integer      xxx.xxx.xxx.xxx -> INTEGER
      * @param ip
-     * @returns {number}
+     * @returns number
      */
-    const ipStr2Int = function ip2Integer(ip) {
+    function ip2Integer(ip) {
         if (typeof ip !== 'string')
             throw 'Err: ip is not a string.';
         let octets = ip.split(/[.]+/);
@@ -66,27 +93,27 @@ module.exports = function PEXP(uni) {
             num += ((octets[3-i])%256 * Math.pow(256,i));
         }
         return num;
-    };
+    }
     /**
      * Convert the ip to string.                INTEGER -> xxx.xxx.xxx.xxx
      * @param ip - number type ip
-     * @returns {string} - ip address, string format
+     * @returns string - ip address, string format
      */
-    const ipInt2Str = function int2IP(ip) {
+    function ipInt2Str(ip) {
         if (typeof ip !== 'number')
             throw 'Err: ip is not a string.';
         return ((ip >> 24 ) & 0xFF) + "." + ((ip >> 16 ) & 0xFF) + "." + ((ip >>  8 ) & 0xFF) + "." + ( ip & 0xFF);
-    };
+    }
 
     /**
      * Convert All IP's in networkPeers array to Integer IP.
      * @param ips - Optional (Array of INT IP's) - return new converted ip's array.
-     * @returns {Array} - Optional
+     * @returns Array - Optional
      */
-    const peerIpsInt2Str = function (ips) {
-        if (typeof  ips === 'undefined' && typeof this.networkPeers!=='undefined') {
-            for (let i in this.networkPeers) {
-                this.networkPeers[i].ip = ipInt2Str(this.networkPeers[i].ip);
+    function peerIpsInt2Str(ips) {
+        if (typeof  ips === 'undefined' && typeof networkPeers!=='undefined') {
+            for (let i in networkPeers) {
+                networkPeers[i].ip = ipInt2Str(networkPeers[i].ip);
             }
         }
         else
@@ -97,103 +124,120 @@ module.exports = function PEXP(uni) {
             }
             return newIps;
         }
-    };
+    }
 
     /**
      * Convert All IP's in networkPeers array to String IP.
      * @param ips - Optional (Array of String IP's) - return new converted ip's array.
-     * @returns {Array} - if parameter is defined,
+     * @returns Array - if parameter is defined,
      */
-    const peerIpsStr2Int = function (ips) {
+    function peerIpsStr2Int(ips) {
         if (typeof  ips === 'undefined') {
-            for (let i in this.networkPeers) {
-                this.networkPeers[i].ip = ipStr2Int(this.networkPeers[i].ip);
+            for (let i in networkPeers) {
+                networkPeers[i].ip = ip2Integer(networkPeers[i].ip);
             }
         }
         else
         {
             let newIps = [];
             for (let i in ips) {
-                newIps[i] = ipStr2Int(ips[i]);
+                newIps[i] = ip2Integer(ips[i]);
             }
             return newIps;
         }
+    }
 
-    };
+    function peers() {
+        return networkPeers;
+    }
+
+
+    function get_uni() {
+        return protocolName;
+    }
 
     //------------------------------------------------------------------------------//
     //                      Peer Exchange Protocol Functions                        //
     //------------------------------------------------------------------------------//
+    function lookUp(callback) {
+        dns.lookup(TALIADOMAIN, (err, address) => {
+            if (err)
+                throw err;
+            ipTalia = address;
+            callback();
+        });
+    }
+
+    function insertUNI(uni) {
+        if (isNameValid(uni)) {
+            protocolName = uni;
+            return true;
+        }
+        else
+            return false;
+    }
+
     /**
      * Returns True if UNI - Uniform Network Identifier is legal under Peer Exchange Protocol Standards
      * @param uniProtocolName - networkname.group:peername?password - string
      * @returns {boolean}
      */
-    const isNameValid = function (uniProtocolName) {
-        const protocolRegex = /^([0-9a-z]{4,20})(\.([0-9a-z]{2,6}|\*\*))?(:([0-9a-z]{2,8}))?(\?([0-9a-z]{6,20}))?$/; // Notice! New Regex not supported by server.
+    function isNameValid(uniProtocolName) {
         return protocolRegex.test(uniProtocolName);
-    };
+    }
 
     /**
      * send UDP packet
      * @param buffer - message to send
      * @param socket - socket to use.
      */
-    const sendPacket = function(buffer, socket) {
-        socket.send(buffer, 0, buffer.length, pexPort, pexIP, function(err, bytes) {
+    function sendPacket(buffer, socket) {
+        socket.send(buffer, 0, buffer.length, TALIAPORT, ipTalia, function (err) {
             if (err)
                 throw err;
         });
+    }
 
-    };
-    // Maximum number of packets to be sent.
-    const MaxPacketSend = 5;
-    /**
+
+        /**
      * This will send packet by default interval time.
-     *
      * @param buffer - buffer of message
      * @param socket - socket for sending UDP.
      * @param callback - callback on error
      */
-    this.sendPacketInterval = function (buffer, socket, callback) {
-        console.log('Send Packet 1:');
+    function sendPacketInterval(buffer, socket, callback) {
         sendPacket(buffer,socket);
-        this.packetSended = 1;
 
-        this.packetintervalID = setInterval(() => {
-            this.packetSended ++;
-            console.log('packet sended: ' + this.packetSended);
+        packetintervalID = packetIntervalSender(buffer, socket);
+    }
+
+
+
+    function packetIntervalSender(buffer, socket) {
+        let packetsSend = 1;
+
+        return setInterval(() => {
+            packetsSend++;
             sendPacket(buffer, socket);
-
-            if (this.packetSended === MaxPacketSend) {
-                clearInterval(this.packetintervalID);
+            if (packetsSend === MaxPacketSend) {
+                clearInterval(packetintervalID);
                 console.log("ERR: Time out... Server unreachable.");
                 socket.close();
-                callback(false);
             }
         }, TIMEOUT);
-    };
+    }
+
     /**
      * Stopping the packet sender interval. use when receiving of datagrams back from server to stop try sending packets.
      */
-    this.stopPacketIntervalUpdate = function() {
-        if (this.packetintervalID !== 'undefined') {
-            clearInterval(this.packetintervalID);
-            delete this.packetintervalID;
-        }
-    };
+    function stopPacketIntervalUpdate() {
 
-    /**
-     * stop Interval.
-     */
-    this.stopIntervalUpdate = function() {
-        if (this.intervalID !== 'undefined') {
-            clearInterval(this.intervalID);
-            delete this.intervalID;
+        if (packetintervalID !== 'undefined') {
+            clearInterval(packetintervalID);
         }
-    };
+    }
 
-    const isMultiPacket = function (buffer) {
+    function isMultiPacket(buffer) {
         if (buffer[0] !== '{') {
             return false;
         }
@@ -214,7 +258,22 @@ module.exports = function PEXP(uni) {
         }
         packetInfo.index = i - 1 ;
         return packetInfo;
-    };
+    }
+
+    function regPeer(callback) {
+        if (typeof ipTalia === 'undefined') {
+            lookUp(() => {
+                callServer((feed) => {
+                    callback(feed);
+                });
+            });
+        }
+        else {
+            callServer((feed) => {
+                callback(feed);
+            });
+        }
+    }
 
     /**
      * Makes a call to the main server and register request for namespace.
@@ -222,9 +281,7 @@ module.exports = function PEXP(uni) {
      * @param callback - on success.
      * @returns {number} - on fail.
      */
-    this.callServer = function (callback) {
-        if (!this.validName)
-            return -1;
+     function callServer(callback) {
         // Create UDP Socket
         const socketListener = dgram.createSocket('udp4');
 
@@ -236,46 +293,49 @@ module.exports = function PEXP(uni) {
         // Event on new message. *datagram packet
         socketListener.on('message', (msg, rinfo) => {
             // Check for the packet expected:
-            if (rinfo.address === pexIP && rinfo.port === pexPort) {
+            if (rinfo.address === ipTalia && rinfo.port === TALIAPORT) {
                 // Check for large packet... i.e multiple packet.
-                this.stopPacketIntervalUpdate();
+                stopPacketIntervalUpdate();
                 let packetInfo = isMultiPacket(msg);
                 if (packetInfo === false) {     // Packet is one.
                     // Converts msg to Object
-                    this.feedBack = JSON.parse(msg);
+                    let feedBack = JSON.parse(msg);
                     // Compare the hash of queries
-                    if (crypto.createHmac('sha256', this.protocolName.toString('utf8')).digest('hex') === this.feedBack.queryHash) {
+                    if (crypto.createHmac('sha256', protocolName.toString()).digest('hex') === feedBack.queryHash) {
                         socketListener.close();
                         // get only the peers from feedback.
-                        this.networkPeers = this.feedBack.peers;
+                        /** @namespace feedBack.peers */
+                        networkPeers = feedBack.peers;
                         // return to callback - feedback obj from server.
-                        callback(this.feedBack);
+                        callback(feedBack);
                     }
                 }       // In case of large packets.
                 else {
-                    this.packets[packetInfo.packetNumber] = msg.substring(packetInfo.index);    // Get the packety buffer without the Packet number and out of.
+                    packets[packetInfo.packetNumber] = msg.substring(packetInfo.index);    // Get the packety buffer without the Packet number and out of.
                     let gotAllPacketsFlag = true;
                     let largeBuffer = '';
                     // Check if we recived all packets related:
                     for(let i = 1; i <= packetInfo.outOf; i++) {
-                        if (this.packets[i] === undefined ) {
+                        if (packets[i] === undefined ) {
                             gotAllPacketsFlag = false;
                             break;
                         }
                         else {
-                            largeBuffer = largeBuffer + this.packets[i];
+                            largeBuffer = largeBuffer + packets[i];
                         }
                     }
                     if (gotAllPacketsFlag) {
                         // Converts msg to Object
-                        this.feedBack = JSON.parse(largeBuffer);
+                        let feedBack = JSON.parse(largeBuffer);
                         // Compare the hash of queries
-                        if (crypto.createHmac('sha256', this.protocolName.toString('utf8')).digest('hex') === this.feedBack.queryHash) {
+                        /** @namespace feedBack.queryHash */
+                        if (crypto.createHmac('sha256', protocolName.toString()).digest('hex') === feedBack.queryHash) {
                             socketListener.close();
                             // get only the peers from feedback.
-                            this.networkPeers = this.feedBack.peers;
+                            /** @namespace feedBack.peers */
+                            networkPeers = feedBack.peers;
                             // return to callback - feedback obj from server.
-                            callback(this.feedBack);
+                            callback(feedBack);
                         }
                     }
                 }
@@ -285,53 +345,55 @@ module.exports = function PEXP(uni) {
         // Event: start listen for incomming dgrams. Close when get the packet.
         socketListener.on('listening', () => {
             //sendPacket(this.protocolName,3,socketListener);
-            this.sendPacketInterval(this.protocolName,socketListener,callback);
+            sendPacketInterval(protocolName,socketListener,callback);
         });
         // bind socket to port
-        socketListener.bind(pexPort);
-    };
+        socketListener.bind(TALIAPORT);
+    }
 
     /**
      * Update server, one way.
      */
-    this.updateServer = function (callback) {
+     function updateServer() {
         const socketListener = dgram.createSocket('udp4');
-        sendPacket(this.protocolName, socketListener);
-        callback();
-    };
+        sendPacket(protocolName, socketListener);
+    }
 
     /**
      * Activate Interval Update, time in ms.
      * @param intervalTime
      */
-    this.startIntervalUpdate = function (intervalTime) {
-        const callBack = function () {
-            console.log('update server');
-        };
-        this.intervalID = setInterval(() => {
-            this.updateServer(callBack);
-        }, intervalTime);
-    };
+     function startIntervalUpdate(intervalTime) {
+        intervalID = intervalUpdate(intervalTime);
+     }
+
+    function intervalUpdate(interval) {
+        return setInterval(() => {
+            updateServer();
+        }, interval);
+    }
 
     /**
      * stop Interval.
      */
-    this.stopIntervalUpdate = function() {
-        if (this.intervalID !== 'undefined') {
-            clearInterval(this.intervalID);
-            delete this.intervalID;
+    function stopIntervalUpdate() {
+        if (intervalID !== 'undefined') {
+            clearInterval(intervalID);
         }
-    };
+    }
 
-    //------------------------------------------------------------------------------//
-    //                      Constructor                                             //
-    //------------------------------------------------------------------------------//
-
-    this.validName = isNameValid(uni);
-
-    this.protocolName = uni;        // Name of protocol Name
-
-    this.networkPeers = [];         // Network Peers, filled when callServer,
-
-    this.packets = [];              // packet handler for multiple packets.
-};
+    return {
+        registerPeer : regPeer,
+        getUNI : insertUNI,
+        startIntervalUpdate :startIntervalUpdate,
+        stopIntervalUpdate : stopIntervalUpdate,
+        networkPeers : peers,
+        get_uni : get_uni,
+        peerHandler : {
+            ip_str2int : ip2Integer,
+            ip_int2str : ipInt2Str,
+            peers_int2str : peerIpsInt2Str,
+            peers_str2int : peerIpsStr2Int
+        }
+    }
+})();

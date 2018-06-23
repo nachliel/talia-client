@@ -1,6 +1,6 @@
 'use strict';
 const program = require('commander');
-const PEXProtocol = require('./modules/talia-client');
+const taliaProtocol = require('./modules/talia-client');
 
 program
     .version('0.1.0', '-v, --version')
@@ -17,20 +17,17 @@ program
     .alias('r')
     .description('Register peer to Network')
     .action((uni) => {
-        const pex = new PEXProtocol(uni);
-
         if (uni === 'undefined') {
             console.log('Err : Not valid syntax: node client.js network.group:peername?passwod');
             process.exit(1);
         }
-        if (!pex.validName) {
+        if (!taliaProtocol.getUNI(uni)) {
             console.log('Err : protocol syntax illegal: network.group:peername?passwod');
             process.exit(1);
         }
 
         console.log("Update server...");
-
-        pex.callServer(function (exp) {
+        taliaProtocol.registerPeer(function (exp) {
             if (exp !== false) {    // Expression contain Object of Server response, on failure -  False.
                 console.log('UNI: ' + uni);
                 console.log('Server Response: ');
@@ -52,20 +49,19 @@ program
     .alias('u')
     .description('Update peer to network and receive all peer connections')
     .action((uni) => {
-        const pex = new PEXProtocol(uni);
 
         if (uni === 'undefined') {
             console.log('Err : Not valid syntax: node client.js network.group:peername?password');
             process.exit(1);
         }
-        if (!pex.validName) {
+        if (!taliaProtocol.getUNI(uni)) {
             console.log('Err : protocol syntax illegal: network.group:peername?password');
             process.exit(1);
         }
 
         console.log("Update server...");
 
-        pex.callServer(function (exp) {
+        taliaProtocol.callServer(function (exp) {
             console.log('UNI: ' + uni);
             console.log('Server Response: ');
             // Prints message returned by server:
@@ -78,13 +74,32 @@ program
             }
         });
     });
+program
+    .command('interval <uni> <time>')
+    .alias('i')
+    .description('Update peer to network by interval.')
+    //.option('-t, --time <t>', 'Specify time to interval updates.', parseInt)
+    .action((uni,time) => {
 
+        if (uni === 'undefined') {
+            console.log('Err : Not valid syntax: node client.js network.group:peername?password');
+            process.exit(1);
+        }
+        if (!taliaProtocol.getUNI(uni)) {
+            console.log('Err : protocol syntax illegal: network.group:peername?password');
+            process.exit(1);
+        }
+
+        console.log("Update server by intervals of: " + time);
+        taliaProtocol.startIntervalUpdate(time);
+    });
 program.on('--help', function(){
     console.log('   Client Connection for Peer Exchange Protocol.');
     console.log('   Command Line Syntax:');
     console.log('       $ command <uni>');
     console.log('       $ reg <uni> - Register UNI');
     console.log('       $ recv <uni> - Receive Peers from UNI');
+    console.log('       $ interval <uni> <time> - Intervals update.');
     console.log('       $ -v / --version - version of program');
     console.log('       $ --help - prints help');
     console.log('   Uniform Network Identifier Syntax:');
